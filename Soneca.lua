@@ -1,18 +1,20 @@
--- Fly Script funcional com botão de ativar/desativar
+-- Serviços
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
-local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- Criar GUI
+-- Interface
 local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
 screenGui.Name = "FlyGui"
 
+-- Botão Fly
 local flyButton = Instance.new("TextButton", screenGui)
-flyButton.Size = UDim2.new(0, 100, 0, 40)
+flyButton.Size = UDim2.new(0, 120, 0, 40)
 flyButton.Position = UDim2.new(0, 20, 0, 100)
 flyButton.Text = "Ativar Fly"
 flyButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
@@ -20,91 +22,95 @@ flyButton.TextColor3 = Color3.new(1, 1, 1)
 flyButton.Font = Enum.Font.SourceSansBold
 flyButton.TextSize = 18
 
--- Lógica do fly
+-- Slider
+local sliderFrame = Instance.new("Frame", screenGui)
+sliderFrame.Size = UDim2.new(0, 120, 0, 25)
+sliderFrame.Position = UDim2.new(0, 20, 0, 150)
+sliderFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+
+local sliderBar = Instance.new("Frame", sliderFrame)
+sliderBar.Size = UDim2.new(0.5, 0, 1, 0)
+sliderBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+
+-- Variáveis
 local flying = false
-local speed = 80
-local keysDown = {}
+local dragging = false
+local speed = 100
+local maxSpeed = 200
 local bodyGyro, bodyVelocity
 
--- Início do voo
+-- Atualizar velocidade
+local function updateSlider(inputPosition)
+	local x = math.clamp((inputPosition.X - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
+	sliderBar.Size = UDim2.new(x, 0, 1, 0)
+	speed = math.floor(x * maxSpeed)
+end
+
+-- Slider eventos
+sliderFrame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		updateSlider(input.Position)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		updateSlider(input.Position)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = false
+	end
+end)
+
+-- Ativar Fly
 local function startFlying()
 	if flying then return end
 	flying = true
 
-	-- Criar BodyGyro e BodyVelocity
 	bodyGyro = Instance.new("BodyGyro")
-	bodyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
 	bodyGyro.P = 1e4
-	bodyGyro.CFrame = humanoidRootPart.CFrame
-	bodyGyro.Parent = humanoidRootPart
+	bodyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+	bodyGyro.CFrame = rootPart.CFrame
+	bodyGyro.Parent = rootPart
 
 	bodyVelocity = Instance.new("BodyVelocity")
-	bodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
 	bodyVelocity.Velocity = Vector3.zero
-	bodyVelocity.Parent = humanoidRootPart
+	bodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+	bodyVelocity.P = 1e4
+	bodyVelocity.Parent = rootPart
 
-	player.Character:WaitForChild("Humanoid").PlatformStand = true
+	humanoid.PlatformStand = true
+	flyButton.Text = "Desativar Fly"
 end
 
--- Fim do voo
+-- Desativar Fly
 local function stopFlying()
 	flying = false
 	if bodyGyro then bodyGyro:Destroy() end
 	if bodyVelocity then bodyVelocity:Destroy() end
-	player.Character:WaitForChild("Humanoid").PlatformStand = false
+	humanoid.PlatformStand = false
+	flyButton.Text = "Ativar Fly"
 end
 
--- Alternar fly com botão
+-- Botão
 flyButton.MouseButton1Click:Connect(function()
 	if flying then
 		stopFlying()
-		flyButton.Text = "Ativar Fly"
 	else
 		startFlying()
-		flyButton.Text = "Desativar Fly"
 	end
 end)
 
--- Captura de teclas
-UserInputService.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
-	keysDown[input.KeyCode] = true
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-	keysDown[input.KeyCode] = false
-end)
-
--- Loop de movimento
+-- Movimento baseado na câmera
 RunService.RenderStepped:Connect(function()
 	if flying and bodyVelocity and bodyGyro then
 		local cam = workspace.CurrentCamera
-		local moveDir = Vector3.zero
-
-		if keysDown[Enum.KeyCode.W] then
-			moveDir += cam.CFrame.LookVector
-		end
-		if keysDown[Enum.KeyCode.S] then
-			moveDir -= cam.CFrame.LookVector
-		end
-		if keysDown[Enum.KeyCode.A] then
-			moveDir -= cam.CFrame.RightVector
-		end
-		if keysDown[Enum.KeyCode.D] then
-			moveDir += cam.CFrame.RightVector
-		end
-		if keysDown[Enum.KeyCode.Space] then
-			moveDir += Vector3.new(0, 1, 0)
-		end
-		if keysDown[Enum.KeyCode.LeftShift] then
-			moveDir -= Vector3.new(0, 1, 0)
-		end
-
-		if moveDir.Magnitude > 0 then
-			moveDir = moveDir.Unit
-		end
-
-		bodyVelocity.Velocity = moveDir * speed
+		local direction = cam.CFrame.LookVector
+		bodyVelocity.Velocity = direction * speed
 		bodyGyro.CFrame = cam.CFrame
 	end
 end)
