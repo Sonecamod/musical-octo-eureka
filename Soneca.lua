@@ -1,14 +1,14 @@
 -- Serviços
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-
 local player = Players.LocalPlayer
+
+-- Espera o personagem
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- Interface
+-- GUI
 local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
 screenGui.Name = "FlyGui"
 
@@ -22,7 +22,7 @@ flyButton.TextColor3 = Color3.new(1, 1, 1)
 flyButton.Font = Enum.Font.SourceSansBold
 flyButton.TextSize = 18
 
--- Slider
+-- Slider de velocidade
 local sliderFrame = Instance.new("Frame", screenGui)
 sliderFrame.Size = UDim2.new(0, 120, 0, 25)
 sliderFrame.Position = UDim2.new(0, 20, 0, 150)
@@ -39,28 +39,28 @@ local speed = 100
 local maxSpeed = 200
 local bodyGyro, bodyVelocity
 
--- Atualizar velocidade
-local function updateSlider(inputPosition)
-	local x = math.clamp((inputPosition.X - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
-	sliderBar.Size = UDim2.new(x, 0, 1, 0)
-	speed = math.floor(x * maxSpeed)
+-- Atualiza slider
+local function updateSlider(x)
+	local relative = math.clamp((x - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
+	sliderBar.Size = UDim2.new(relative, 0, 1, 0)
+	speed = math.floor(relative * maxSpeed)
 end
 
--- Slider eventos
+-- Eventos slider
 sliderFrame.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		dragging = true
-		updateSlider(input.Position)
+		updateSlider(input.Position.X)
 	end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
+game:GetService("UserInputService").InputChanged:Connect(function(input)
 	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-		updateSlider(input.Position)
+		updateSlider(input.Position.X)
 	end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
+game:GetService("UserInputService").InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		dragging = false
 	end
@@ -72,15 +72,15 @@ local function startFlying()
 	flying = true
 
 	bodyGyro = Instance.new("BodyGyro")
-	bodyGyro.P = 1e4
 	bodyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+	bodyGyro.P = 1e4
 	bodyGyro.CFrame = rootPart.CFrame
 	bodyGyro.Parent = rootPart
 
 	bodyVelocity = Instance.new("BodyVelocity")
-	bodyVelocity.Velocity = Vector3.zero
 	bodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
 	bodyVelocity.P = 1e4
+	bodyVelocity.Velocity = Vector3.zero
 	bodyVelocity.Parent = rootPart
 
 	humanoid.PlatformStand = true
@@ -98,19 +98,22 @@ end
 
 -- Botão
 flyButton.MouseButton1Click:Connect(function()
-	if flying then
-		stopFlying()
-	else
-		startFlying()
-	end
+	if flying then stopFlying() else startFlying() end
 end)
 
--- Movimento baseado na câmera
+-- Loop de movimento com MoveDirection
 RunService.RenderStepped:Connect(function()
 	if flying and bodyVelocity and bodyGyro then
 		local cam = workspace.CurrentCamera
-		local direction = cam.CFrame.LookVector
-		bodyVelocity.Velocity = direction * speed
+		local moveDir = humanoid.MoveDirection
+
+		if moveDir.Magnitude > 0 then
+			local moveVector = cam.CFrame:VectorToWorldSpace(moveDir)
+			bodyVelocity.Velocity = moveVector.Unit * speed
+		else
+			bodyVelocity.Velocity = Vector3.zero
+		end
+
 		bodyGyro.CFrame = cam.CFrame
 	end
 end)
